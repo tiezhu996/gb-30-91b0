@@ -77,6 +77,32 @@ CREATE TABLE IF NOT EXISTS visit_reviews (
   CONSTRAINT fk_review_app FOREIGN KEY (application_id) REFERENCES adoption_applications(id)
 );
 
+CREATE TABLE IF NOT EXISTS handover_appointments (
+  id BIGSERIAL PRIMARY KEY,
+  application_id BIGINT NOT NULL,
+  org_id BIGINT NOT NULL,
+  user_id BIGINT NOT NULL,
+  location VARCHAR(255) NOT NULL,
+  slots JSONB NOT NULL DEFAULT '[]',
+  confirm_before TIMESTAMPTZ NOT NULL,
+  selected_slot TIMESTAMPTZ,
+  status VARCHAR(16) NOT NULL DEFAULT 'offered',
+  cancelled_by VARCHAR(8),
+  confirmed_at TIMESTAMPTZ,
+  cancelled_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT fk_handover_app FOREIGN KEY (application_id) REFERENCES adoption_applications(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_handover_app ON handover_appointments (application_id);
+CREATE INDEX IF NOT EXISTS idx_handover_org ON handover_appointments (org_id);
+CREATE INDEX IF NOT EXISTS idx_handover_user ON handover_appointments (user_id);
+-- One org slot can be held by one pending/confirmed appointment at a time.
+CREATE UNIQUE INDEX IF NOT EXISTS uni_handover_org_slot_active
+  ON handover_appointments (org_id, selected_slot)
+  WHERE selected_slot IS NOT NULL AND status IN ('pending', 'confirmed');
+
 CREATE TABLE IF NOT EXISTS community_posts (
   id BIGSERIAL PRIMARY KEY,
   user_id BIGINT NOT NULL,
@@ -147,7 +173,8 @@ INSERT INTO pets (org_id, name, species, breed, age, gender, size, city, descrip
   (1, '旺财', 'dog', '中华田园犬', 2, 'male', 'medium', '上海', '性格温顺忠诚，已绝育疫苗齐全。', '亲人活泼', '健康', TRUE, TRUE, '["https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=600"]', 'available'),
   (1, '雪球', 'cat', '英短', 1, 'female', 'small', '上海', '安静粘人的小猫咪，已驱虫。', '温顺', '健康', TRUE, TRUE, '["https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=600"]', 'available'),
   (2, '跳跳', 'rabbit', '垂耳兔', 1, 'male', 'small', '北京', '活泼好动的垂耳兔，喜欢胡萝卜。', '活泼', '健康', FALSE, FALSE, '["https://images.unsplash.com/photo-1585110396000-c9ffd4e4b308?w=600"]', 'available'),
-  (2, '豆豆', 'dog', '柯基', 3, 'male', 'small', '北京', '短腿萌宠，粘人爱撒娇。', '粘人', '健康', TRUE, TRUE, '["https://images.unsplash.com/photo-1529778873920-4da4926a72c2?w=600"]', 'available');
+  (2, '豆豆', 'dog', '柯基', 3, 'male', 'small', '北京', '短腿萌宠，粘人爱撒娇。', '粘人', '健康', TRUE, TRUE, '["https://images.unsplash.com/photo-1529778873920-4da4926a72c2?w=600"]', 'available'),
+  (1, '奶盖', 'cat', '奶牛猫', 2, 'male', 'small', '上海', '活泼亲人的奶牛猫，已完成免疫，等待一个永远的家。', '活泼亲人', '健康', TRUE, TRUE, '["https://images.unsplash.com/photo-1495360010541-f48722b34f7d?w=600"]', 'adopted');
 
 INSERT INTO community_posts (user_id, org_id, title, content, post_type, like_count, comment_count) VALUES
   (3, 1, '旺财的救助故事：从流浪到新生', '旺财是在街角被发现的流浪狗，经过治疗与照顾，如今已经健康活泼，等待有缘家庭领养。', 'story', 32, 6),
@@ -169,3 +196,13 @@ INSERT INTO adoption_applications (user_id, pet_id, org_id, questionnaire, statu
 
 INSERT INTO visit_reviews (application_id, user_id, org_id, scheduled_days, due_date, status) VALUES
   (1, 2, 1, 30, CURRENT_DATE + 30, 'pending');
+
+-- 已通过申请 + 机构已发起交接预约（等待领养人选择时段）
+INSERT INTO adoption_applications (user_id, pet_id, org_id, questionnaire, status) VALUES
+  (2, 5, 1, '{"has_yard":true,"pet_experience":"养猫三年"}', 'approved');
+
+INSERT INTO handover_appointments (application_id, org_id, user_id, location, slots, confirm_before, status) VALUES
+  (2, 1, 2, '上海市徐汇区暖窝救助站领养大厅',
+   jsonb_build_array(to_char(NOW() + INTERVAL '2 days', 'YYYY-MM-DD"T"HH24:MI:SSZ'),
+                     to_char(NOW() + INTERVAL '3 days', 'YYYY-MM-DD"T"HH24:MI:SSZ')),
+   NOW() + INTERVAL '1 day', 'offered');

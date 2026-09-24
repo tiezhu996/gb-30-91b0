@@ -67,7 +67,7 @@ gb-30/
 │   ├── cmd/server/            # main.go + migrate/seed
 │   └── internal/
 │       ├── config/            # DB/Redis/MinIO/JWT/限流配置
-│       ├── model/             # 10 个实体
+│       ├── model/             # 11 个实体
 │       ├── repository/        # 按实体分文件
 │       ├── service/           # 按实体分文件 + 状态机 + stats
 │       ├── handler/           # 按实体分文件 + upload/home
@@ -79,7 +79,7 @@ gb-30/
 └── frontend/
     ├── nginx.conf
     └── src/
-        ├── api/               # user/organization/pet/application/review/post/donation/favorite
+        ├── api/               # user/organization/pet/application/handover/review/post/donation/favorite
         ├── stores/            # authStore/userStore/petStore/applicationStore/reviewStore
         ├── components/common/ # PetCard/ApplicationStatusBadge/OrgCard/PostCard/ReviewTaskList/...
         ├── hooks/             # useAuth/useAdoptionStats/useReviewTasks/useDonationStats
@@ -134,6 +134,13 @@ gb-30/
 | GET | /api/v1/applications/me | 登录 | 我的申请列表 |
 | GET | /api/v1/applications/org | org | 机构收到的申请 |
 | PUT | /api/v1/applications/:id/status | 登录 | 申请状态流转（approved 时事务更新宠物为已领养） |
+| GET | /api/v1/applications/:id/handovers | 登录 | 某申请的交接预约记录（含全部历史，按时间倒序） |
+| POST | /api/v1/applications/:id/handovers | org（限流） | 机构按申请发起交接：地点 + 确认截止时间 + 可预约时段 |
+| GET | /api/v1/handovers/me | 登录 | 领养人的交接预约列表 |
+| GET | /api/v1/handovers/org | org | 机构收到的交接预约列表 |
+| POST | /api/v1/handovers/:hid/select | user | 领养人选中时段并占用（同一机构同一时段仅一个申请） |
+| POST | /api/v1/handovers/:hid/confirm | org | 机构确认交接预约 |
+| POST | /api/v1/handovers/:hid/cancel | 登录 | 确认前双方均可取消，取消后时段释放 |
 | GET | /api/v1/reviews/me | 登录 | 我的回访记录 |
 | GET | /api/v1/reviews/org | org | 机构回访记录 |
 | POST | /api/v1/reviews | org（限流） | 创建回访计划 |
@@ -160,6 +167,12 @@ gb-30/
 
 - 后端：`internal/constants/application.go`（定义+状态机）、`internal/model/adoption_application.go`（模型）、`internal/service/application_service.go`（流转校验）、`internal/util/formatters.go`（AppStatusText）、`internal/constants/log_templates.go`、`database/init.sql`
 - 前端：`src/constants/application.ts`（定义）、`src/components/common/ApplicationStatusBadge.tsx`、`src/pages/Applications.tsx`（进度列表/筛选）、`src/hooks/useAdoptionStats.ts`
+
+### HandoverStatus（offered/pending/confirmed/cancelled/expired）
+
+- 后端：`internal/constants/handover.go`（定义+终态判定）、`internal/model/handover_appointment.go`、`internal/service/handover_service.go`（选择占用/确认/取消/到点失效）、`internal/repository/handover_appointment_repository.go`、`internal/util/formatters.go`（HandoverStatusText）、`cmd/server/migrate.go`（部分唯一索引）、`database/init.sql`
+- 前端：`src/constants/handover.ts`、`src/api/handover.ts`、`src/components/common/HandoverPanel.tsx`、`src/pages/Applications.tsx`（交接列 + 展开面板）
+- 并发约束：`uni_handover_org_slot_active` 部分唯一索引保证「同一机构同一时段仅一个 pending/confirmed 预约占用」；取消/失效时 `selected_slot` 置空释放时段
 
 ### PetSpecies（dog/cat/rabbit/other）
 

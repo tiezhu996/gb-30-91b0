@@ -46,6 +46,31 @@ export interface VisitReview {
   created_at: string
 }
 
+export type HandoverStatus = 'offered' | 'pending' | 'confirmed' | 'cancelled' | 'expired'
+
+export interface HandoverSlot {
+  time: string
+  locked: boolean
+  locked_application_id?: number
+}
+
+export interface HandoverAppointment {
+  id: number
+  application_id: number
+  org_id: number
+  user_id: number
+  location: string
+  slots: HandoverSlot[]
+  confirm_before: string
+  selected_slot: string | null
+  status: HandoverStatus
+  cancelled_by: string
+  confirmed_at: string | null
+  cancelled_at: string | null
+  created_at: string
+  updated_at: string
+}
+
 export interface CommunityPost {
   id: number
   user_id: number

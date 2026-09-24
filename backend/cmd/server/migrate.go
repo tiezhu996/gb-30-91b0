@@ -2,6 +2,7 @@ package main
 
 import (
 	"log/slog"
+	"strings"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -12,18 +13,29 @@ import (
 )
 
 func migrate(db *gorm.DB) error {
-	return db.AutoMigrate(
+	if err := db.AutoMigrate(
 		&model.User{},
 		&model.Organization{},
 		&model.Pet{},
 		&model.AdoptionApplication{},
+		&model.HandoverAppointment{},
 		&model.VisitReview{},
 		&model.CommunityPost{},
 		&model.PostComment{},
 		&model.Donation{},
 		&model.DonationUsage{},
 		&model.Favorite{},
-	)
+	); err != nil {
+		return err
+	}
+	// Partial unique index: one org slot can be locked by one appointment at a
+	// time. Cancelled/expired appointments release their slot (selected_slot
+	// becomes NULL), so they never participate in the constraint; only
+	// pending/confirmed rows do.
+	return db.Exec(`
+		CREATE UNIQUE INDEX IF NOT EXISTS uni_handover_org_slot_active
+		ON handover_appointments (org_id, selected_slot)
+		WHERE selected_slot IS NOT NULL AND status IN ('pending', 'confirmed')`).Error
 }
 
 func seed(db *gorm.DB) error {
@@ -74,6 +86,7 @@ func seed(db *gorm.DB) error {
 		{OrgID: org.ID, Name: "雪球", Species: "cat", Breed: "英短", Age: 1, Gender: "female", Size: "small", City: "上海", Description: "安静粘人的小猫咪，已驱虫。", Personality: "温顺", HealthStatus: "健康", Neutered: true, Vaccinated: true, ImageURLs: `["https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=600"]`, Status: "available"},
 		{OrgID: org2.ID, Name: "跳跳", Species: "rabbit", Breed: "垂耳兔", Age: 1, Gender: "male", Size: "small", City: "北京", Description: "活泼好动的垂耳兔，喜欢胡萝卜。", Personality: "活泼", HealthStatus: "健康", Neutered: false, Vaccinated: false, ImageURLs: `["https://images.unsplash.com/photo-1585110396000-c9ffd4e4b308?w=600"]`, Status: "available"},
 		{OrgID: org2.ID, Name: "豆豆", Species: "dog", Breed: "柯基", Age: 3, Gender: "male", Size: "small", City: "北京", Description: "短腿萌宠，粘人爱撒娇。", Personality: "粘人", HealthStatus: "健康", Neutered: true, Vaccinated: true, ImageURLs: `["https://images.unsplash.com/photo-1529778873920-4da4926a72c2?w=600"]`, Status: "available"},
+		{OrgID: org.ID, Name: "奶盖", Species: "cat", Breed: "奶牛猫", Age: 2, Gender: "male", Size: "small", City: "上海", Description: "活泼亲人的奶牛猫，已完成免疫，等待一个永远的家。", Personality: "活泼亲人", HealthStatus: "健康", Neutered: true, Vaccinated: true, ImageURLs: `["https://images.unsplash.com/photo-1495360010541-f48722b34f7d?w=600"]`, Status: "adopted"},
 	}
 	if err := db.Create(&pets).Error; err != nil {
 		return err
@@ -124,6 +137,37 @@ func seed(db *gorm.DB) error {
 		return err
 	}
 
-	logger.Info("gbadopt seed data created", "users", 3, "orgs", 2, "pets", len(pets), "posts", len(posts), "apps", len(apps))
+	// Approved application with an in-progress handover arrangement (org has
+	// offered location/deadline/slots; the adopter has not picked one yet).
+	approvedApps := []model.AdoptionApplication{
+		{UserID: user.ID, PetID: pets[4].ID, OrgID: org.ID, Questionnaire: `{"has_yard":true,"pet_experience":"养猫三年"}`, Status: "approved"},
+	}
+	if err := db.Create(&approvedApps).Error; err != nil {
+		return err
+	}
+	deadline := time.Now().Add(24 * time.Hour).Truncate(time.Hour)
+	slotA := time.Now().Add(48 * time.Hour).Truncate(time.Hour).Format(time.RFC3339)
+	slotB := time.Now().Add(72 * time.Hour).Truncate(time.Hour).Format(time.RFC3339)
+	handovers := []model.HandoverAppointment{
+		{
+			ApplicationID: approvedApps[0].ID, UserID: user.ID, OrgID: org.ID,
+			Location: "上海市徐汇区暖窝救助站领养大厅", Slots: fmtJSONArray(slotA, slotB),
+			ConfirmBefore: deadline, Status: "offered",
+		},
+	}
+	if err := db.Create(&handovers).Error; err != nil {
+		return err
+	}
+
+	logger.Info("gbadopt seed data created", "users", 3, "orgs", 2, "pets", len(pets), "posts", len(posts), "apps", len(apps)+len(approvedApps))
 	return nil
+}
+
+// fmtJSONArray builds a JSON string array of the given values.
+func fmtJSONArray(values ...string) string {
+	parts := make([]string, 0, len(values))
+	for _, v := range values {
+		parts = append(parts, `"`+v+`"`)
+	}
+	return "[" + strings.Join(parts, ",") + "]"
 }

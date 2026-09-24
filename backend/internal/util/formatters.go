@@ -105,3 +105,21 @@ func OrgStatusText(s string) string {
 		return "未知"
 	}
 }
+
+// HandoverStatusText maps a handover appointment status to Chinese text.
+func HandoverStatusText(s string) string {
+	switch s {
+	case "offered":
+		return "待选时段"
+	case "pending":
+		return "待机构确认"
+	case "confirmed":
+		return "已确认"
+	case "cancelled":
+		return "已取消"
+	case "expired":
+		return "已失效"
+	default:
+		return "未知"
+	}
+}
