@@ -16,13 +16,14 @@ import (
 
 // ApplicationHandler exposes adoption application endpoints.
 type ApplicationHandler struct {
-	svc    *service.ApplicationService
-	logger *slog.Logger
+	svc        *service.ApplicationService
+	handoverSv *service.HandoverService
+	logger     *slog.Logger
 }
 
 // NewApplicationHandler creates an ApplicationHandler.
-func NewApplicationHandler(svc *service.ApplicationService, logger *slog.Logger) *ApplicationHandler {
-	return &ApplicationHandler{svc: svc, logger: logger}
+func NewApplicationHandler(svc *service.ApplicationService, handoverSv *service.HandoverService, logger *slog.Logger) *ApplicationHandler {
+	return &ApplicationHandler{svc: svc, handoverSv: handoverSv, logger: logger}
 }
 
 // Submit handles POST /applications.
@@ -47,7 +48,7 @@ func (h *ApplicationHandler) ListMy(c *gin.Context) {
 		c.Error(err)
 		return
 	}
-	c.JSON(http.StatusOK, dto.OK(items))
+	c.JSON(http.StatusOK, dto.OK(h.handoverSv.EnrichApplications(items)))
 }
 
 // ListOrg handles GET /applications/org?status=.
@@ -58,7 +59,7 @@ func (h *ApplicationHandler) ListOrg(c *gin.Context) {
 		c.Error(err)
 		return
 	}
-	c.JSON(http.StatusOK, dto.OK(items))
+	c.JSON(http.StatusOK, dto.OK(h.handoverSv.EnrichApplications(items)))
 }
 
 // UpdateStatus handles PUT /applications/:id/status.

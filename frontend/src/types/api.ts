@@ -22,6 +22,47 @@ export interface UserInfo {
   created_at: string
 }
 
+export type HandoverAppointmentStatus = 'pending' | 'confirmed' | 'cancelled' | 'expired'
+export type HandoverSlotStatus = 'free' | 'locked_by_me' | 'occupied'
+
+export interface HandoverSlot {
+  start_at: string
+  end_at: string
+}
+
+export interface HandoverSlotView extends HandoverSlot {
+  status: HandoverSlotStatus
+  application_id?: number
+}
+
+export interface HandoverAppointment {
+  id: number
+  offer_id: number
+  application_id: number
+  org_id: number
+  user_id: number
+  location: string
+  deadline: string
+  start_at: string
+  end_at: string
+  status: HandoverAppointmentStatus
+  cancelled_by?: number
+  confirmed_at?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface HandoverOffer {
+  id: number
+  application_id: number
+  org_id: number
+  location: string
+  deadline: string
+  slots: HandoverSlotView[]
+  appointment?: HandoverAppointment
+  created_at: string
+}
+
 export interface AdoptionApplication {
   id: number
   user_id: number
@@ -31,6 +72,8 @@ export interface AdoptionApplication {
   status: string
   created_at: string
   updated_at: string
+  handover?: HandoverOffer
+  history?: HandoverAppointment[]
 }
 
 export interface VisitReview {

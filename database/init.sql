@@ -77,6 +77,46 @@ CREATE TABLE IF NOT EXISTS visit_reviews (
   CONSTRAINT fk_review_app FOREIGN KEY (application_id) REFERENCES adoption_applications(id)
 );
 
+-- 机构针对已通过申请给出的交接方案：地点、确认截止时间、可预约时段
+CREATE TABLE IF NOT EXISTS handover_offers (
+  id BIGSERIAL PRIMARY KEY,
+  application_id BIGINT NOT NULL,
+  org_id BIGINT NOT NULL,
+  location VARCHAR(255) NOT NULL,
+  deadline TIMESTAMPTZ NOT NULL,
+  slots JSONB NOT NULL DEFAULT '[]',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT fk_offer_app FOREIGN KEY (application_id) REFERENCES adoption_applications(id)
+);
+CREATE INDEX IF NOT EXISTS idx_offer_application ON handover_offers (application_id);
+
+-- 领养人选中时段后生成的交接预约（锁定）
+CREATE TABLE IF NOT EXISTS handover_appointments (
+  id BIGSERIAL PRIMARY KEY,
+  offer_id BIGINT NOT NULL,
+  application_id BIGINT NOT NULL,
+  org_id BIGINT NOT NULL,
+  user_id BIGINT NOT NULL,
+  location VARCHAR(255) NOT NULL,
+  deadline TIMESTAMPTZ NOT NULL,
+  start_at TIMESTAMPTZ NOT NULL,
+  end_at TIMESTAMPTZ NOT NULL,
+  status VARCHAR(16) NOT NULL DEFAULT 'pending',
+  cancelled_by BIGINT,
+  confirmed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT fk_appt_offer FOREIGN KEY (offer_id) REFERENCES handover_offers(id),
+  CONSTRAINT fk_appt_app FOREIGN KEY (application_id) REFERENCES adoption_applications(id)
+);
+CREATE INDEX IF NOT EXISTS idx_appt_application ON handover_appointments (application_id);
+CREATE INDEX IF NOT EXISTS idx_appt_org ON handover_appointments (org_id);
+-- 同一机构同一时段只能被一条有效（待确认/已确认）预约占用，取消/失效后释放
+CREATE UNIQUE INDEX IF NOT EXISTS uq_handover_active_org_slot
+  ON handover_appointments (org_id, start_at, end_at)
+  WHERE status IN ('pending', 'confirmed');
+
 CREATE TABLE IF NOT EXISTS community_posts (
   id BIGSERIAL PRIMARY KEY,
   user_id BIGINT NOT NULL,

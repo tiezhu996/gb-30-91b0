@@ -134,6 +134,11 @@ gb-30/
 | GET | /api/v1/applications/me | 登录 | 我的申请列表 |
 | GET | /api/v1/applications/org | org | 机构收到的申请 |
 | PUT | /api/v1/applications/:id/status | 登录 | 申请状态流转（approved 时事务更新宠物为已领养） |
+| GET | /api/v1/applications/:id/handover | 登录 | 查看申请的最新交接方案（时段占用情况+当前预约） |
+| POST | /api/v1/handovers/offers | org（限流） | 按申请发起交接方案（地点、确认截止时间、可预约时段） |
+| POST | /api/v1/handovers/appointments | user（限流） | 领养人选中时段并占用（同机构同时段唯一，事务+唯一索引） |
+| PUT | /api/v1/handovers/appointments/:id/cancel | 登录 | 确认前机构/领养人取消，释放时段 |
+| PUT | /api/v1/handovers/appointments/:id/confirm | org | 机构确认预约，确认后不可改 |
 | GET | /api/v1/reviews/me | 登录 | 我的回访记录 |
 | GET | /api/v1/reviews/org | org | 机构回访记录 |
 | POST | /api/v1/reviews | org（限流） | 创建回访计划 |
@@ -175,6 +180,12 @@ gb-30/
 
 - 后端：`internal/constants/organization.go`（定义）、`internal/model/organization.go`、`internal/service/organization_service.go`、`internal/service/pet_service.go`（发布前校验认证）、`internal/util/formatters.go`、`database/init.sql`
 - 前端：`src/constants/organization.ts`（定义）、`src/components/common/OrgCard.tsx`、`src/pages/OrgDetail.tsx`
+
+### HandoverAppointmentStatus（pending/confirmed/cancelled/expired）
+
+- 规则：仅 `approved` 申请可安排交接；机构发布方案（地点 + 确认截止时间 + 时段），领养人锁定时段，同机构同一时段仅允许一条 pending/confirmed 预约（事务 + 部分唯一索引 `uq_handover_active_org_slot`）；确认前双方可取消并释放时段；过截止时间未确认自动失效；confirmed/expired 不可改；重新安排新建方案与预约，旧记录保留于 `history`。
+- 后端：`internal/constants/handover.go`、`internal/model/handover_offer.go`、`internal/model/handover_appointment.go`、`internal/service/handover_service.go`、`database/init.sql`
+- 前端：`src/constants/application.ts`（HandoverApptStatusMap）、`src/components/common/HandoverPanel.tsx`、`src/pages/Applications.tsx`、`src/api/handover.ts`
 
 ## 横切关注点
 

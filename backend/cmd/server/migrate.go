@@ -12,7 +12,7 @@ import (
 )
 
 func migrate(db *gorm.DB) error {
-	return db.AutoMigrate(
+	if err := db.AutoMigrate(
 		&model.User{},
 		&model.Organization{},
 		&model.Pet{},
@@ -23,7 +23,18 @@ func migrate(db *gorm.DB) error {
 		&model.Donation{},
 		&model.DonationUsage{},
 		&model.Favorite{},
-	)
+		&model.HandoverOffer{},
+		&model.HandoverAppointment{},
+	); err != nil {
+		return err
+	}
+	// An org's slot window can be held by at most one active (pending/confirmed)
+	// appointment. Cancelled/expired rows release the slot and are excluded.
+	return db.Exec(`
+		CREATE UNIQUE INDEX IF NOT EXISTS uq_handover_active_org_slot
+		ON handover_appointments (org_id, start_at, end_at)
+		WHERE status IN ('pending', 'confirmed')
+	`).Error
 }
 
 func seed(db *gorm.DB) error {

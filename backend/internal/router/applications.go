@@ -8,10 +8,11 @@ import (
 	"github.com/gbadopt/gbadopt/internal/middleware"
 )
 
-func registerApplicationRoutes(v1 *gin.RouterGroup, cfg *config.Config, h *handler.ApplicationHandler, limiter *middleware.RateLimiter) {
+func registerApplicationRoutes(v1 *gin.RouterGroup, cfg *config.Config, h *handler.ApplicationHandler, hh *handler.HandoverHandler, limiter *middleware.RateLimiter) {
 	apps := v1.Group("/applications", middleware.AuthRequired(cfg))
 	apps.POST("", limiter.Limit(), h.Submit)
 	apps.GET("/me", h.ListMy)
 	apps.GET("/org", middleware.RequireRole("org"), h.ListOrg)
+	apps.GET("/:id/handover", hh.GetOffer)
 	apps.PUT("/:id/status", h.UpdateStatus)
 }
